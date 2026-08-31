@@ -59,16 +59,6 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="orders"
-        options={{
-          title: 'Orders',
-          headerTitle: 'My Orders',
-          tabBarIcon: ({ color, focused }) => (
-            <Icon name={focused ? 'receipt' : 'receipt-outline'} size={24} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
         name="profile"
         options={{
           title: 'Account',

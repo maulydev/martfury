@@ -1,6 +1,5 @@
 import { createAuthClient } from 'better-auth/react';
 import { expoClient } from '@better-auth/expo/client';
-import { adminClient } from 'better-auth/client/plugins';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 
@@ -51,7 +50,6 @@ export const authClient = createAuthClient({
       storagePrefix: 'martfury',
       storage: SecureStore,
     }),
-    adminClient(),
   ],
   fetchOptions: {
     // Better Auth rejects any cookie-bearing request that lacks a real
@@ -66,6 +64,13 @@ export const authClient = createAuthClient({
     headers: {
       origin: trustedOrigin,
     },
+    // Without this, an unreachable backend (wrong LAN IP, backend down,
+    // device on a different network) leaves useSession() stuck on
+    // isPending forever instead of surfacing an error — fail fast instead.
+    // 30s (not lower) because this dev backend cold-compiles routes on
+    // first hit (Turbopack) and can genuinely take several seconds — a
+    // tighter timeout was firing on legitimate, still-in-flight requests.
+    timeout: 30000,
   },
 });
 
@@ -80,12 +85,19 @@ export const { signIn, signUp, signOut, useSession } = authClient;
  */
 export async function authFetch(path: string, init: RequestInit = {}): Promise<Response> {
   const cookie = authClient.getCookie();
-  return fetch(`${baseURL}${path}`, {
-    ...init,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(cookie ? { Cookie: cookie } : {}),
-      ...init.headers,
-    },
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 30000);
+  try {
+    return await fetch(`${baseURL}${path}`, {
+      ...init,
+      signal: controller.signal,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(cookie ? { Cookie: cookie } : {}),
+        ...init.headers,
+      },
+    });
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   StyleSheet,
   View,
@@ -25,7 +25,7 @@ type MenuItem = {
 export default function ProfileScreen() {
   const router = useRouter();
   const theme = Colors.light;
-  const { data: session, isPending } = useSession();
+  const { data: session, isPending, error, refetch } = useSession();
   const user = session?.user;
 
   const initials = user?.name
@@ -39,6 +39,12 @@ export default function ProfileScreen() {
 
   const menuSections: { title: string; items: MenuItem[] }[] = [
     {
+      title: 'Orders',
+      items: [
+        { icon: 'receipt-outline', label: 'My Orders', route: '/orders' },
+      ],
+    },
+    {
       title: 'Account Settings',
       items: [
         { icon: 'person-outline', label: 'Edit Profile', route: '/profile/edit' },
@@ -46,20 +52,34 @@ export default function ProfileScreen() {
         { icon: 'card-outline', label: 'Payment Methods', comingSoon: true },
       ],
     },
-    ...(user?.role === 'admin'
-      ? [
-          {
-            title: 'Admin & Operations',
-            items: [
-              { icon: 'speedometer-outline', label: 'Admin Dashboard', route: '/admin' as Href },
-            ],
-          },
-        ]
-      : []),
   ];
 
-  const handleSignOut = async () => {
-    await signOut();
+  const [signingOut, setSigningOut] = useState(false);
+
+  const handleSignOut = () => {
+    Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Sign Out',
+        style: 'destructive',
+        onPress: async () => {
+          setSigningOut(true);
+          try {
+            await signOut();
+          } catch (e) {
+            const message =
+              e instanceof Error && e.name === 'AbortError'
+                ? 'The request timed out. Check the backend is running and reachable, then try again.'
+                : e instanceof Error
+                  ? e.message
+                  : 'Could not sign out. Please try again.';
+            Alert.alert('Sign Out Failed', message);
+          } finally {
+            setSigningOut(false);
+          }
+        },
+      },
+    ]);
   };
 
   if (isPending) {
@@ -70,19 +90,31 @@ export default function ProfileScreen() {
     );
   }
 
+  if (error) {
+    return (
+      <View style={[styles.container, styles.centeredContainer, { backgroundColor: theme.background }]}>
+        <Icon name="close-circle" size={64} color={theme.error} />
+        <Text style={[styles.title, { color: theme.text }]}>Couldn't reach the server</Text>
+        <Text style={[styles.subtitle, { color: theme.textSecondary }]}>
+          {error.message ?? 'Check that the backend is running and reachable from this device.'}
+        </Text>
+        <TouchableOpacity style={[styles.btn, { backgroundColor: theme.primary }]} onPress={() => refetch()}>
+          <Text style={styles.btnText}>Try Again</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
   if (!user) {
     return (
-      <View style={[styles.container, styles.loggedOutContainer, { backgroundColor: theme.background }]}>
+      <View style={[styles.container, styles.centeredContainer, { backgroundColor: theme.background }]}>
         <Icon name="person-circle-outline" size={64} color={theme.textSecondary} />
         <Text style={[styles.title, { color: theme.text }]}>You're not signed in</Text>
         <Text style={[styles.subtitle, { color: theme.textSecondary }]}>
           Sign in to access your orders, wishlist, and profile
         </Text>
 
-        <TouchableOpacity
-          style={[styles.btn, { backgroundColor: theme.primary }]}
-          onPress={() => router.push('/auth/sign-in')}
-        >
+        <TouchableOpacity style={[styles.btn, { backgroundColor: theme.primary }]} onPress={() => router.push('/auth/sign-in')}>
           <Text style={styles.btnText}>Sign In</Text>
         </TouchableOpacity>
 
@@ -152,9 +184,16 @@ export default function ProfileScreen() {
         <TouchableOpacity
           style={[styles.sectionCard, styles.signOutRow, { backgroundColor: theme.card, borderColor: theme.border }]}
           onPress={handleSignOut}
+          disabled={signingOut}
         >
-          <Icon name="log-out-outline" size={20} color={theme.error} />
-          <Text style={[styles.menuLabel, { color: theme.error }]}>Sign Out</Text>
+          {signingOut ? (
+            <ActivityIndicator color={theme.error} />
+          ) : (
+            <>
+              <Icon name="log-out-outline" size={20} color={theme.error} />
+              <Text style={[styles.menuLabel, { color: theme.error }]}>Sign Out</Text>
+            </>
+          )}
         </TouchableOpacity>
       </View>
     </ScrollView>
@@ -162,16 +201,12 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 16,
-  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  loggedOutContainer: {
+  centeredContainer: {
     justifyContent: 'center',
     alignItems: 'center',
     gap: 12,
@@ -204,6 +239,10 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 16,
     fontWeight: '700',
+  },
+  container: {
+    flex: 1,
+    padding: 16,
   },
   profileCard: {
     flexDirection: 'row',

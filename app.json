@@ -7,6 +7,7 @@
     "icon": "./assets/images/icon.png",
     "scheme": "martfury",
     "userInterfaceStyle": "light",
+    "backgroundColor": "#f4f5f8",
     "ios": {
       "icon": "./assets/expo.icon"
     },
@@ -33,7 +34,8 @@
           "imageWidth": 76
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      "expo-system-ui"
     ],
     "experiments": {
       "typedRoutes": true,
