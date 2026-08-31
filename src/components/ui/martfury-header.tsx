@@ -12,15 +12,26 @@ import {
 import { useRouter } from 'expo-router';
 import { Icon } from './icon';
 import { Colors } from '@/constants/theme';
+import { useCartStore } from '@/stores/cart.store';
+import { useWishlistStore } from '@/stores/wishlist.store';
+import { useSession } from '@/lib/auth-client';
 
 export function MartfuryHeader() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const isDesktop = width > 768;
+  const cartCount = useCartStore((s) => s.getCount());
+  const wishlistCount = useWishlistStore((s) => s.items.length);
+  const { data: session } = useSession();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All Categories');
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
+
+  const handleSearch = () => {
+    const q = searchQuery.trim();
+    router.push(q ? { pathname: '/shop', params: { q } } : '/shop');
+  };
 
   return (
     <View style={styles.headerContainer}>
@@ -43,12 +54,14 @@ export function MartfuryHeader() {
             {/* Actions: Wishlist, Cart, Account */}
             <View style={styles.actionsContainer}>
               {/* Wishlist */}
-              <TouchableOpacity style={styles.actionItem} onPress={() => router.push('/shop')}>
+              <TouchableOpacity style={styles.actionItem} onPress={() => router.push('/wishlist')}>
                 <View style={styles.iconBadgeWrapper}>
                   <Icon name="heart-outline" size={22} color="#333" />
-                  <View style={styles.badge}>
-                    <Text style={styles.badgeText}>0</Text>
-                  </View>
+                  {wishlistCount > 0 && (
+                    <View style={styles.badge}>
+                      <Text style={styles.badgeText}>{wishlistCount > 99 ? '99+' : wishlistCount}</Text>
+                    </View>
+                  )}
                 </View>
               </TouchableOpacity>
 
@@ -56,25 +69,29 @@ export function MartfuryHeader() {
               <TouchableOpacity style={styles.actionItem} onPress={() => router.push('/cart')}>
                 <View style={styles.iconBadgeWrapper}>
                   <Icon name="cart-outline" size={22} color="#333" />
-                  <View style={styles.badge}>
-                    <Text style={styles.badgeText}>0</Text>
-                  </View>
+                  {cartCount > 0 && (
+                    <View style={styles.badge}>
+                      <Text style={styles.badgeText}>{cartCount > 99 ? '99+' : cartCount}</Text>
+                    </View>
+                  )}
                 </View>
               </TouchableOpacity>
 
-              {/* Account */}
-              <TouchableOpacity
-                style={styles.accountItem}
-                onPress={() => router.push('/auth/sign-in')}
-              >
-                <Icon name="person-outline" size={24} color="#333" />
-                {isDesktop && (
-                  <View style={styles.accountTextContainer}>
-                    <Text style={styles.accountSub}>Hello</Text>
-                    <Text style={styles.accountMain}>Register / Sign in</Text>
-                  </View>
-                )}
-              </TouchableOpacity>
+              {/* Account (signed-out only — signed-in users use the Account tab) */}
+              {!session && (
+                <TouchableOpacity
+                  style={styles.accountItem}
+                  onPress={() => router.push('/auth/sign-in')}
+                >
+                  <Icon name="person-outline" size={24} color="#333" />
+                  {isDesktop && (
+                    <View style={styles.accountTextContainer}>
+                      <Text style={styles.accountSub}>Hello</Text>
+                      <Text style={styles.accountMain}>Register / Sign in</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              )}
             </View>
           </View>
 
@@ -99,13 +116,12 @@ export function MartfuryHeader() {
                 placeholderTextColor="#999"
                 value={searchQuery}
                 onChangeText={setSearchQuery}
+                onSubmitEditing={handleSearch}
+                returnKeyType="search"
               />
             </View>
 
-            <TouchableOpacity
-              style={styles.searchButton}
-              onPress={() => router.push('/shop')}
-            >
+            <TouchableOpacity style={styles.searchButton} onPress={handleSearch}>
               <Icon name="search-outline" size={18} color="#ffffff" />
             </TouchableOpacity>
           </View>

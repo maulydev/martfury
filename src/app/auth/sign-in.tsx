@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   StyleSheet,
   View,
@@ -13,11 +13,12 @@ import {
 import { useRouter } from 'expo-router';
 import { Icon } from '@/components/ui/icon';
 import { Colors } from '@/constants/theme';
-import { signIn } from '@/lib/auth-client';
+import { signIn, useSession } from '@/lib/auth-client';
 
 export default function SignInScreen() {
   const router = useRouter();
   const theme = Colors.light;
+  const { data: session, isPending: isSessionPending } = useSession();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -25,6 +26,18 @@ export default function SignInScreen() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [focusedInput, setFocusedInput] = useState<'email' | 'password' | null>(null);
+
+  // Already signed-in users shouldn't land on this screen (e.g. deep link,
+  // or session finishing its load after the screen mounted) — bounce them
+  // back to wherever they came from instead of showing the form.
+  useEffect(() => {
+    if (isSessionPending || !session) return;
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/(tabs)/profile');
+    }
+  }, [isSessionPending, session, router]);
 
   const handleSignIn = async () => {
     if (!email || !password) {
@@ -48,6 +61,11 @@ export default function SignInScreen() {
       router.replace('/(tabs)/profile');
     }
   };
+
+  // Avoid flashing the form before the redirect effect above fires.
+  if (isSessionPending || session) {
+    return <View style={[styles.screen, { backgroundColor: theme.background }]} />;
+  }
 
   return (
     <KeyboardAvoidingView

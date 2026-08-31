@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   StyleSheet,
   View,
@@ -11,223 +11,123 @@ import {
 import { useRouter } from 'expo-router';
 import { Icon } from '@/components/ui/icon';
 import { ProductCard } from '@/components/ui/product-card';
+import { ProductCardSkeleton } from '@/components/ui/product-card-skeleton';
 import { SafeImage } from '@/components/ui/safe-image';
 import { MartfuryHeader } from '@/components/ui/martfury-header';
-import { MartfuryFooter } from '@/components/ui/martfury-footer';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Colors } from '@/constants/theme';
+import { formatGHS } from '@/lib/currency';
+import {
+  getCategories,
+  getProducts,
+  getProductPricing,
+  getProductImage,
+  getProductCategoryName,
+  getProductRating,
+  getDefaultVariant,
+  getCartItemId,
+  type ApiCategory,
+  type ApiProduct,
+} from '@/lib/catalog';
+import { useCartStore } from '@/stores/cart.store';
+import { useToastStore } from '@/stores/toast.store';
+
+const featurePillars = [
+  {
+    icon: 'truck-outline',
+    title: 'Free Delivery',
+    subtitle: 'For all orders over ₵400',
+  },
+  {
+    icon: 'refresh-outline',
+    title: '90 Days Return',
+    subtitle: 'If goods have problems',
+  },
+  {
+    icon: 'shield-checkmark-outline',
+    title: 'Secure Payment',
+    subtitle: '100% secure payment',
+  },
+  {
+    icon: 'headset-outline',
+    title: '24/7 Support',
+    subtitle: 'Dedicated support',
+  },
+];
 
 export default function HomeScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const isDesktop = width > 768;
 
-  const featurePillars = [
-    {
-      icon: 'truck-outline',
-      title: 'Free Delivery',
-      subtitle: 'For all orders over $99',
-    },
-    {
-      icon: 'refresh-outline',
-      title: '90 Days Return',
-      subtitle: 'If goods have problems',
-    },
-    {
-      icon: 'shield-checkmark-outline',
-      title: 'Secure Payment',
-      subtitle: '100% secure payment',
-    },
-    {
-      icon: 'headset-outline',
-      title: '24/7 Support',
-      subtitle: 'Dedicated support',
-    },
-  ];
+  const [categories, setCategories] = useState<ApiCategory[]>([]);
+  const [groceryProducts, setGroceryProducts] = useState<ApiProduct[]>([]);
+  const [fashionProducts, setFashionProducts] = useState<ApiProduct[]>([]);
+  const [electronicsProducts, setElectronicsProducts] = useState<ApiProduct[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const addItem = useCartStore((s) => s.addItem);
 
-  const topCategories = [
-    {
-      id: 'cat-1',
-      name: 'Groceries',
-      image: 'https://images.unsplash.com/photo-1610832958506-aa56368176cf?q=80&w=400&auto=format&fit=crop',
+  // Quick "Add to cart" from a product card — uses the same default variant
+  // as the price shown on the card (mirrors the web shop's pickDisplayVariant).
+  const addProductToCart = useCallback(
+    (prod: ApiProduct) => {
+      const { price } = getProductPricing(prod);
+      const variant = getDefaultVariant(prod);
+      addItem({
+        id: variant?.id ?? prod.id,
+        name: prod.name,
+        price,
+        image: getProductImage(prod) ?? '',
+      });
+      useToastStore.getState().show(`${prod.name} added to cart`);
     },
-    {
-      id: 'cat-2',
-      name: 'Beauty',
-      image: 'https://images.unsplash.com/photo-1596462502278-27bfdc403348?q=80&w=400&auto=format&fit=crop',
-    },
-    {
-      id: 'cat-3',
-      name: 'Home & Garden',
-      image: 'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?q=80&w=400&auto=format&fit=crop',
-    },
-    {
-      id: 'cat-4',
-      name: 'Furniture',
-      image: 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?q=80&w=400&auto=format&fit=crop',
-    },
-    {
-      id: 'cat-5',
-      name: 'Electronics',
-      image: 'https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?q=80&w=400&auto=format&fit=crop',
-    },
-  ];
+    [addItem],
+  );
 
-  const groceryProducts = [
-    {
-      id: 'g-1',
-      name: 'Organic Fresh Salad',
-      price: '$12.00',
-      image: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?q=80&w=400&auto=format&fit=crop',
-    },
-    {
-      id: 'g-2',
-      name: 'Aged Balsamic Vinegar',
-      price: '$29.00',
-      image: 'https://images.unsplash.com/photo-1474979266404-7eaacbcd87c5?q=80&w=400&auto=format&fit=crop',
-    },
-    {
-      id: 'g-3',
-      name: 'Himalayan Pink Salt',
-      price: '$15.00',
-      image: 'https://images.unsplash.com/photo-1518110165389-9e8a867c4e51?q=80&w=400&auto=format&fit=crop',
-    },
-    {
-      id: 'g-4',
-      name: 'Organic Avocado Oil',
-      price: '$49.00',
-      image: 'https://images.unsplash.com/photo-1474979266404-7eaacbcd87c5?q=80&w=400&auto=format&fit=crop',
-    },
-    {
-      id: 'g-5',
-      name: 'Manuka Honey MGO 400+',
-      price: '$199.00',
-      image: 'https://images.unsplash.com/photo-1587049352847-4a222e784d38?q=80&w=400&auto=format&fit=crop',
-    },
-    {
-      id: 'g-6',
-      name: 'Organic Matcha Powder',
-      price: '$25.00',
-      image: 'https://images.unsplash.com/photo-1576092768241-dec231879fc3?q=80&w=400&auto=format&fit=crop',
-    },
-    {
-      id: 'g-7',
-      name: 'Extra Virgin Olive Oil',
-      price: '$129.00',
-      image: 'https://images.unsplash.com/photo-1474979266404-7eaacbcd87c5?q=80&w=400&auto=format&fit=crop',
-    },
-    {
-      id: 'g-8',
-      name: 'Premium Roast Coffee Beans',
-      price: '$18.00',
-      image: 'https://images.unsplash.com/photo-1559056199-641a0ac8b55e?q=80&w=400&auto=format&fit=crop',
-    },
-  ];
+  const loadHomeData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [cats, groceries, fashion, electronics] = await Promise.all([
+        getCategories({ limit: 6 }),
+        getProducts({ category: 'groceries', limit: 8 }),
+        getProducts({ category: 'fashion', limit: 4 }),
+        getProducts({ category: 'electronics', limit: 8 }),
+      ]);
+      setCategories(cats);
+      setGroceryProducts(groceries.products);
+      setFashionProducts(fashion.products);
+      setElectronicsProducts(electronics.products);
+    } catch (e) {
+      setError(
+        e instanceof Error && e.name === 'AbortError'
+          ? 'The request timed out. Check that the backend is running and reachable.'
+          : e instanceof Error
+            ? e.message
+            : 'Could not load the shop right now.',
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-  const summerFashionProducts = [
-    {
-      id: 'sf-1',
-      name: 'Waterproof Wayfarer Sunglasses',
-      price: '$199.00',
-      rating: '5.0',
-      reviews: '12',
-      points: [
-        'High quality durable lightweight frame',
-        'Ergonomic design for maximum comfort',
-        '100% UV400 polarization protection',
-      ],
-      image: 'https://images.unsplash.com/photo-1511499767150-a48a237f0083?q=80&w=400&auto=format&fit=crop',
-    },
-    {
-      id: 'sf-2',
-      name: 'Gold Stud Earrings Set',
-      price: '$259.00',
-      rating: '4.8',
-      reviews: '8',
-      points: [
-        'Pure 14k gold polished finish',
-        'Hypoallergenic lightweight design',
-        'Includes luxury gift presentation box',
-      ],
-      image: 'https://images.unsplash.com/photo-1630019852942-f89202989a59?q=80&w=400&auto=format&fit=crop',
-    },
-    {
-      id: 'sf-3',
-      name: 'Summer Linen Trousers',
-      price: '$688.00',
-      rating: '4.9',
-      reviews: '15',
-      points: [
-        '100% organic breathable linen fabric',
-        'Tailored relaxed fit for summer wear',
-        'Easy care machine washable material',
-      ],
-      image: 'https://images.unsplash.com/photo-1594633312681-425c7b97ccd1?q=80&w=400&auto=format&fit=crop',
-    },
-    {
-      id: 'sf-4',
-      name: 'Classic Leather Overcoat',
-      price: '$7900.00',
-      rating: '5.0',
-      reviews: '21',
-      points: [
-        'Genuine handcrafted premium leather',
-        'Soft inner lining with internal pockets',
-        'Timeless stylish winter coat silhouette',
-      ],
-      image: 'https://images.unsplash.com/photo-1551028719-00167b16eac5?q=80&w=400&auto=format&fit=crop',
-    },
-  ];
+  useEffect(() => {
+    loadHomeData();
+  }, [loadHomeData]);
 
-  const electronicsProducts = [
-    {
-      id: 'el-1',
-      name: 'Kindle Paperwhite',
-      price: '$1499.00',
-      image: 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?q=80&w=400&auto=format&fit=crop',
-    },
-    {
-      id: 'el-2',
-      name: 'Dell XPS 13 Plus',
-      price: '$1999.00',
-      image: 'https://images.unsplash.com/photo-1593642632823-8f785ba67e45?q=80&w=400&auto=format&fit=crop',
-    },
-    {
-      id: 'el-3',
-      name: 'iPad Air 5',
-      price: '$1500.00',
-      image: 'https://images.unsplash.com/photo-1544244015-0df4b3ffc6b0?q=80&w=400&auto=format&fit=crop',
-    },
-    {
-      id: 'el-4',
-      name: 'Fujifilm X100V',
-      price: '$11000.00',
-      image: 'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?q=80&w=400&auto=format&fit=crop',
-    },
-    {
-      id: 'el-5',
-      name: 'Samsung Galaxy Watch 6',
-      price: '$2500.00',
-      image: 'https://images.unsplash.com/photo-1508685096489-7aacd43bd3b1?q=80&w=400&auto=format&fit=crop',
-    },
-    {
-      id: 'el-6',
-      name: 'Wireless Headphones',
-      price: '$490.00',
-      image: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?q=80&w=400&auto=format&fit=crop',
-    },
-    {
-      id: 'el-7',
-      name: 'iPhone 15 Pro',
-      price: '$1299.00',
-      image: 'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?q=80&w=400&auto=format&fit=crop',
-    },
-    {
-      id: 'el-8',
-      name: 'Minimal Desk Setup',
-      price: '$1999.00',
-      image: 'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?q=80&w=400&auto=format&fit=crop',
-    },
-  ];
+  if (error) {
+    return (
+      <View style={[styles.stateContainer, { backgroundColor: Colors.light.background }]}>
+        <Icon name="close-circle" size={64} color={Colors.light.error} />
+        <Text style={styles.stateTitle}>Couldn't load the shop</Text>
+        <Text style={styles.stateSubtitle}>{error}</Text>
+        <TouchableOpacity style={styles.stateButton} onPress={loadHomeData}>
+          <Text style={styles.stateButtonText}>Try Again</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
@@ -313,38 +213,59 @@ export default function HomeScreen() {
 
           {/* 2. FEATURE PILLARS BAR */}
           <View style={styles.featuresContainer}>
-            {featurePillars.map((item, idx) => (
-              <View key={idx} style={styles.featureItem}>
-                <Icon name={item.icon as any} size={28} color="#2962ff" />
-                <View style={styles.featureTextWrapper}>
-                  <Text style={styles.featureTitle}>{item.title}</Text>
-                  <Text style={styles.featureSubtitle}>{item.subtitle}</Text>
+            {featurePillars.map((item, idx) => {
+              // Assumes a fixed 2-column grid (matches the 4 pillars above).
+              const isRightColumn = idx % 2 === 1;
+              const isBottomRow = idx >= 2;
+              return (
+                <View
+                  key={idx}
+                  style={[
+                    styles.featureItem,
+                    isRightColumn && styles.featureItemRightColumn,
+                    isBottomRow && styles.featureItemBottomRow,
+                  ]}
+                >
+                  <Icon name={item.icon as any} size={28} color="#2962ff" />
+                  <View style={styles.featureTextWrapper}>
+                    <Text style={styles.featureTitle}>{item.title}</Text>
+                    <Text style={styles.featureSubtitle}>{item.subtitle}</Text>
+                  </View>
                 </View>
-              </View>
-            ))}
+              );
+            })}
           </View>
 
           {/* 3. TOP CATEGORIES OF THE MONTH */}
           <View style={styles.sectionWrapper}>
             <Text style={styles.sectionHeaderTitle}>Top categories of the month</Text>
             <View style={styles.categoriesRow}>
-              {topCategories.map((cat) => (
-                <TouchableOpacity
-                  key={cat.id}
-                  style={styles.categoryBox}
-                  onPress={() => router.push('/shop')}
-                  activeOpacity={0.85}
-                >
-                  <View style={styles.categoryImageWrapper}>
-                    <Image
-                      source={{ uri: cat.image }}
-                      style={styles.categoryImage}
-                      resizeMode="cover"
-                    />
-                  </View>
-                  <Text style={styles.categoryBoxName}>{cat.name}</Text>
-                </TouchableOpacity>
-              ))}
+              {loading
+                ? Array.from({ length: 6 }).map((_, i) => (
+                    <View key={i} style={styles.categoryBox}>
+                      <Skeleton width={72} height={72} borderRadius={36} />
+                      <Skeleton width="70%" height={12} />
+                    </View>
+                  ))
+                : categories.map((cat) => (
+                    <TouchableOpacity
+                      key={cat.id}
+                      style={styles.categoryBox}
+                      onPress={() => router.push({ pathname: '/shop', params: { category: cat.slug } })}
+                      activeOpacity={0.85}
+                    >
+                      <View style={styles.categoryImageWrapper}>
+                        {cat.image && (
+                          <Image
+                            source={{ uri: cat.image }}
+                            style={styles.categoryImage}
+                            resizeMode="cover"
+                          />
+                        )}
+                      </View>
+                      <Text style={styles.categoryBoxName}>{cat.name}</Text>
+                    </TouchableOpacity>
+                  ))}
             </View>
           </View>
 
@@ -399,19 +320,30 @@ export default function HomeScreen() {
             </View>
 
             <View style={styles.productsGrid}>
-              {groceryProducts.map((prod) => (
-                <ProductCard
-                  key={prod.id}
-                  id={prod.id}
-                  name={prod.name}
-                  price={prod.price}
-                  image={prod.image}
-                  category="Groceries"
-                  layout="grid"
-                  onPress={() => router.push('/shop')}
-                  onAddToCart={() => router.push('/cart')}
-                />
-              ))}
+              {loading
+                ? Array.from({ length: 8 }).map((_, i) => <ProductCardSkeleton key={i} layout="grid" />)
+                : groceryProducts.map((prod) => {
+                    const { price, oldPrice } = getProductPricing(prod);
+                    const { rating, reviews } = getProductRating(prod);
+                    return (
+                      <ProductCard
+                        key={prod.id}
+                        id={prod.id}
+                        cartItemId={getCartItemId(prod)}
+                        name={prod.name}
+                        price={formatGHS(price, false)}
+                        originalPrice={oldPrice ? formatGHS(oldPrice, false) : undefined}
+                        image={getProductImage(prod) ?? ''}
+                        category={getProductCategoryName(prod) ?? 'Groceries'}
+                        rating={rating}
+                        reviews={reviews}
+                        badge={oldPrice ? 'SALE' : undefined}
+                        layout="grid"
+                        onPress={() => router.push(`/product/${prod.id}`)}
+                        onAddToCart={() => addProductToCart(prod)}
+                      />
+                    );
+                  })}
             </View>
           </View>
 
@@ -447,22 +379,30 @@ export default function HomeScreen() {
 
               {/* 2-Column Product Grid */}
               <View style={styles.productsGrid}>
-                {summerFashionProducts.map((prod) => (
-                  <ProductCard
-                    key={prod.id}
-                    id={prod.id}
-                    name={prod.name}
-                    price={prod.price}
-                    image={prod.image}
-                    category="Fashion"
-                    rating={parseFloat(prod.rating)}
-                    reviews={parseInt(prod.reviews, 10)}
-                    badge="SALE"
-                    layout="grid"
-                    onPress={() => router.push('/shop')}
-                    onAddToCart={() => router.push('/cart')}
-                  />
-                ))}
+                {loading
+                  ? Array.from({ length: 4 }).map((_, i) => <ProductCardSkeleton key={i} layout="grid" />)
+                  : fashionProducts.map((prod) => {
+                      const { price, oldPrice } = getProductPricing(prod);
+                      const { rating, reviews } = getProductRating(prod);
+                      return (
+                        <ProductCard
+                          key={prod.id}
+                          id={prod.id}
+                          cartItemId={getCartItemId(prod)}
+                          name={prod.name}
+                          price={formatGHS(price, false)}
+                          originalPrice={oldPrice ? formatGHS(oldPrice, false) : undefined}
+                          image={getProductImage(prod) ?? ''}
+                          category={getProductCategoryName(prod) ?? 'Fashion'}
+                          rating={rating}
+                          reviews={reviews}
+                          badge={oldPrice ? 'SALE' : undefined}
+                          layout="grid"
+                          onPress={() => router.push(`/product/${prod.id}`)}
+                          onAddToCart={() => addProductToCart(prod)}
+                        />
+                      );
+                    })}
               </View>
             </View>
           </View>
@@ -477,31 +417,73 @@ export default function HomeScreen() {
             </View>
 
             <View style={styles.electronicsGrid}>
-              {electronicsProducts.map((prod) => (
-                <ProductCard
-                  key={prod.id}
-                  id={prod.id}
-                  name={prod.name}
-                  price={prod.price}
-                  image={prod.image}
-                  category="Electronics"
-                  layout="grid"
-                  onPress={() => router.push('/shop')}
-                  onAddToCart={() => router.push('/cart')}
-                />
-              ))}
+              {loading
+                ? Array.from({ length: 8 }).map((_, i) => (
+                    <ProductCardSkeleton key={i} layout="grid" imageHeight={150} />
+                  ))
+                : electronicsProducts.map((prod) => {
+                    const { price, oldPrice } = getProductPricing(prod);
+                    const { rating, reviews } = getProductRating(prod);
+                    return (
+                      <ProductCard
+                        key={prod.id}
+                        id={prod.id}
+                        cartItemId={getCartItemId(prod)}
+                        name={prod.name}
+                        price={formatGHS(price, false)}
+                        originalPrice={oldPrice ? formatGHS(oldPrice, false) : undefined}
+                        image={getProductImage(prod) ?? ''}
+                        category={getProductCategoryName(prod) ?? 'Electronics'}
+                        rating={rating}
+                        reviews={reviews}
+                        badge={oldPrice ? 'SALE' : undefined}
+                        layout="grid"
+                        onPress={() => router.push(`/product/${prod.id}`)}
+                        onAddToCart={() => addProductToCart(prod)}
+                      />
+                    );
+                  })}
             </View>
           </View>
         </View>
       </View>
 
-      {/* Martfury Bottom Footer */}
-      <MartfuryFooter />
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
+  stateContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 12,
+    padding: 24,
+  },
+  stateTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: Colors.light.text,
+    marginTop: 8,
+  },
+  stateSubtitle: {
+    fontSize: 14,
+    lineHeight: 20,
+    textAlign: 'center',
+    color: Colors.light.textSecondary,
+  },
+  stateButton: {
+    backgroundColor: Colors.light.primary,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 12,
+    marginTop: 8,
+  },
+  stateButtonText: {
+    color: '#ffffff',
+    fontSize: 15,
+    fontWeight: '700',
+  },
   container: {
     flex: 1,
     backgroundColor: Colors.light.background,
@@ -642,19 +624,26 @@ const styles = StyleSheet.create({
   featuresContainer: {
     backgroundColor: '#ffffff',
     borderRadius: 8,
-    padding: 16,
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    rowGap: 16,
     borderWidth: 1,
     borderColor: '#e1e4e8',
+    overflow: 'hidden',
   },
   featureItem: {
-    width: '48.5%',
+    width: '50%',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
+    padding: 16,
+  },
+  featureItemRightColumn: {
+    borderLeftWidth: 1,
+    borderLeftColor: '#e1e4e8',
+  },
+  featureItemBottomRow: {
+    borderTopWidth: 1,
+    borderTopColor: '#e1e4e8',
   },
   featureTextWrapper: {
     flex: 1,

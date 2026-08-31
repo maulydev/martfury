@@ -11,6 +11,9 @@ import {
 import { Icon } from './icon';
 import { SafeImage } from './safe-image';
 import { Colors } from '@/constants/theme';
+import { useCartStore } from '@/stores/cart.store';
+import { useWishlistStore } from '@/stores/wishlist.store';
+import { useToastStore } from '@/stores/toast.store';
 
 export interface ProductCardProps {
   id: string;
@@ -26,9 +29,22 @@ export interface ProductCardProps {
   badge?: string;
   layout?: 'grid' | 'list';
   style?: StyleProp<ViewStyle>;
+  /**
+   * The id this product is keyed by in the cart store (its default variant
+   * id — see getCartItemId in lib/catalog.ts). Falls back to `id` when not
+   * given. Once this id is in the cart, the card swaps its "Add to cart"
+   * button for a quantity stepper it drives directly against the store.
+   */
+  cartItemId?: string;
   onPress?: () => void;
   onAddToCart?: () => void;
+  /**
+   * Extra side effect to run whenever the wishlist heart is toggled (e.g.
+   * analytics). The heart button itself is wired straight to the wishlist
+   * store — keyed by `id` — so this is optional.
+   */
   onAddToWishlist?: () => void;
+  onRemove?: () => void;
 }
 
 export function ProductCard({
@@ -45,10 +61,28 @@ export function ProductCard({
   badge,
   layout = 'grid',
   style,
+  cartItemId,
   onPress,
   onAddToCart,
   onAddToWishlist,
+  onRemove,
 }: ProductCardProps) {
+  const cartKey = cartItemId ?? id;
+  const cartQty = useCartStore((s) => s.items.find((i) => i.id === cartKey)?.qty ?? 0);
+  const increaseCartQty = useCartStore((s) => s.increaseQty);
+  const decreaseCartQty = useCartStore((s) => s.decreaseQty);
+  const inCart = cartQty > 0;
+
+  const inWishlist = useWishlistStore((s) => s.has(id));
+  const toggleWishlistItem = useWishlistStore((s) => s.toggle);
+  const handleToggleWishlist = () => {
+    toggleWishlistItem({ id, name, price, originalPrice, image, category, rating, reviews });
+    useToastStore
+      .getState()
+      .show(inWishlist ? `${name} removed from wishlist` : `${name} added to wishlist`);
+    onAddToWishlist?.();
+  };
+
   const formatPrice = (val: number | string) => {
     if (typeof val === 'number') {
       return `$${val.toFixed(2)}`;
@@ -86,6 +120,17 @@ export function ProductCard({
               <Text style={styles.badgeText}>{badge}</Text>
             </View>
           ) : null}
+          {onRemove && (
+            <TouchableOpacity
+              style={styles.removeImageButton}
+              onPress={onRemove}
+              activeOpacity={0.8}
+              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+            >
+              <View style={[styles.removeIconLine, styles.removeIconLineFwd]} />
+              <View style={[styles.removeIconLine, styles.removeIconLineBack]} />
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* Details Container */}
@@ -120,21 +165,47 @@ export function ProductCard({
           </View>
 
           <View style={styles.listActionButtonsRow}>
-            <TouchableOpacity
-              style={styles.addCartIconButton}
-              onPress={onAddToCart}
-              activeOpacity={0.8}
-            >
-              <Icon name="cart-outline" size={15} color="#ffffff" />
-            </TouchableOpacity>
-
-            {onAddToWishlist && (
+            {inCart ? (
+              <View style={styles.listQtyStepper}>
+                <TouchableOpacity
+                  style={styles.listQtyButton}
+                  onPress={() => decreaseCartQty(cartKey)}
+                  activeOpacity={0.8}
+                  hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                >
+                  <Icon name="remove" size={13} color="#333333" />
+                </TouchableOpacity>
+                <Text style={styles.listQtyValue}>{cartQty}</Text>
+                <TouchableOpacity
+                  style={styles.listQtyButton}
+                  onPress={() => increaseCartQty(cartKey)}
+                  activeOpacity={0.8}
+                  hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                >
+                  <Icon name="add" size={13} color="#333333" />
+                </TouchableOpacity>
+              </View>
+            ) : (
               <TouchableOpacity
-                style={styles.wishlistIconButton}
-                onPress={onAddToWishlist}
+                style={styles.addCartIconButton}
+                onPress={onAddToCart}
                 activeOpacity={0.8}
               >
-                <Icon name="heart-outline" size={15} color="#666666" />
+                <Icon name="cart-outline" size={15} color="#ffffff" />
+              </TouchableOpacity>
+            )}
+
+            {!onRemove && (
+              <TouchableOpacity
+                style={styles.wishlistIconButton}
+                onPress={handleToggleWishlist}
+                activeOpacity={0.8}
+              >
+                <Icon
+                  name={inWishlist ? 'heart' : 'heart-outline'}
+                  size={15}
+                  color={inWishlist ? '#ff4d4f' : '#666666'}
+                />
               </TouchableOpacity>
             )}
           </View>
@@ -157,6 +228,30 @@ export function ProductCard({
             <Text style={styles.badgeText}>{badge}</Text>
           </View>
         ) : null}
+        {onRemove ? (
+          <TouchableOpacity
+            style={styles.removeImageButton}
+            onPress={onRemove}
+            activeOpacity={0.8}
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+          >
+            <View style={[styles.removeIconLine, styles.removeIconLineFwd]} />
+            <View style={[styles.removeIconLine, styles.removeIconLineBack]} />
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            style={styles.wishlistImageButton}
+            onPress={handleToggleWishlist}
+            activeOpacity={0.8}
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+          >
+            <Icon
+              name={inWishlist ? 'heart' : 'heart-outline'}
+              size={14}
+              color={inWishlist ? '#ff4d4f' : '#666666'}
+            />
+          </TouchableOpacity>
+        )}
       </View>
 
       <View style={styles.gridInfo}>
@@ -177,13 +272,35 @@ export function ProductCard({
           ) : null}
         </View>
 
-        <TouchableOpacity
-          style={styles.addCartBlueButton}
-          onPress={onAddToCart}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.addCartBlueButtonText}>Add to cart</Text>
-        </TouchableOpacity>
+        {inCart ? (
+          <View style={styles.gridQtyStepper}>
+            <TouchableOpacity
+              style={styles.gridQtyButton}
+              onPress={() => decreaseCartQty(cartKey)}
+              activeOpacity={0.8}
+              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+            >
+              <Icon name="remove" size={14} color="#333333" />
+            </TouchableOpacity>
+            <Text style={styles.gridQtyValue}>{cartQty}</Text>
+            <TouchableOpacity
+              style={styles.gridQtyButton}
+              onPress={() => increaseCartQty(cartKey)}
+              activeOpacity={0.8}
+              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+            >
+              <Icon name="add" size={14} color="#333333" />
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <TouchableOpacity
+            style={styles.addCartBlueButton}
+            onPress={onAddToCart}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.addCartBlueButtonText}>Add to cart</Text>
+          </TouchableOpacity>
+        )}
       </View>
     </TouchableOpacity>
   );
@@ -221,6 +338,48 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 10,
     fontWeight: '700',
+  },
+  removeImageButton: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    borderRadius: 12,
+    width: 24,
+    height: 24,
+  },
+  wishlistImageButton: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    borderRadius: 12,
+    width: 24,
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // Drawn as two crossed lines instead of an icon-font glyph: icon fonts
+  // (SF Symbols/Material Symbols, via expo-symbols) render with their own
+  // font ascent/descent padding, which visibly throws off the optical
+  // center in a badge this small. Lines centered via top/left 50% + a
+  // negative half-dimension margin are pixel-exact on every platform.
+  removeIconLine: {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    width: 12,
+    height: 1.5,
+    marginTop: -0.75,
+    marginLeft: -6,
+    borderRadius: 1,
+    backgroundColor: '#ffffff',
+  },
+  removeIconLineFwd: {
+    transform: [{ rotate: '45deg' }],
+  },
+  removeIconLineBack: {
+    transform: [{ rotate: '-45deg' }],
   },
   gridInfo: {
     padding: 10,
@@ -275,6 +434,29 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     alignItems: 'center',
     marginTop: 4,
+  },
+  gridQtyStepper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderColor: Colors.light.primary,
+    borderRadius: 4,
+    marginTop: 4,
+    overflow: 'hidden',
+  },
+  gridQtyButton: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+  },
+  gridQtyValue: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#222222',
+    minWidth: 24,
+    textAlign: 'center',
   },
   addCartBlueButtonRow: {
     backgroundColor: Colors.light.primary,
@@ -367,6 +549,28 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  listQtyStepper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: Colors.light.primary,
+    borderRadius: 6,
+    height: 32,
+    overflow: 'hidden',
+  },
+  listQtyButton: {
+    width: 26,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  listQtyValue: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#222222',
+    minWidth: 18,
+    textAlign: 'center',
   },
   wishlistIconButton: {
     borderWidth: 1,

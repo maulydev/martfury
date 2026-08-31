@@ -1,31 +1,8 @@
 import { createAuthClient } from 'better-auth/react';
 import { expoClient } from '@better-auth/expo/client';
 import * as SecureStore from 'expo-secure-store';
-import { Platform } from 'react-native';
 
-/**
- * Resolve the Better Auth backend origin.
- *
- * Set EXPO_PUBLIC_BETTER_AUTH_BASE_URL (e.g. in a .env.local, see
- * .env.local.example) to point at your API — this is required when testing
- * on a physical device, where it must be your machine's LAN IP
- * (e.g. http://192.168.1.20:3000). Without it we fall back to sensible
- * per-platform localhost defaults for simulators/emulators/web.
- */
-function resolveBaseURL(): string {
-  const fromEnv = process.env.EXPO_PUBLIC_BETTER_AUTH_BASE_URL;
-  if (fromEnv) return fromEnv;
-
-  if (Platform.OS === 'android') {
-    // The Android emulator maps the host machine's localhost to 10.0.2.2.
-    return 'http://10.0.2.2:3000';
-  }
-
-  // iOS simulator and web can reach the host machine directly.
-  return 'http://localhost:3000';
-}
-
-const baseURL = resolveBaseURL();
+import { baseURL, DEFAULT_FETCH_TIMEOUT_MS } from './env';
 
 /**
  * The Origin header value Better Auth will actually trust by default.
@@ -67,10 +44,7 @@ export const authClient = createAuthClient({
     // Without this, an unreachable backend (wrong LAN IP, backend down,
     // device on a different network) leaves useSession() stuck on
     // isPending forever instead of surfacing an error — fail fast instead.
-    // 30s (not lower) because this dev backend cold-compiles routes on
-    // first hit (Turbopack) and can genuinely take several seconds — a
-    // tighter timeout was firing on legitimate, still-in-flight requests.
-    timeout: 30000,
+    timeout: DEFAULT_FETCH_TIMEOUT_MS,
   },
 });
 
@@ -86,7 +60,7 @@ export const { signIn, signUp, signOut, useSession } = authClient;
 export async function authFetch(path: string, init: RequestInit = {}): Promise<Response> {
   const cookie = authClient.getCookie();
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 30000);
+  const timeoutId = setTimeout(() => controller.abort(), DEFAULT_FETCH_TIMEOUT_MS);
   try {
     return await fetch(`${baseURL}${path}`, {
       ...init,

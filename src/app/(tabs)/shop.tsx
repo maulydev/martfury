@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   StyleSheet,
   View,
@@ -6,168 +6,199 @@ import {
   TextInput,
   TouchableOpacity,
   ScrollView,
-  Image,
+  Modal,
   useWindowDimensions,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Icon } from '@/components/ui/icon';
 import { ProductCard } from '@/components/ui/product-card';
 import { MartfuryHeader } from '@/components/ui/martfury-header';
-import { MartfuryFooter } from '@/components/ui/martfury-footer';
+import { Skeleton } from '@/components/ui/skeleton';
+import { ProductCardSkeleton } from '@/components/ui/product-card-skeleton';
 import { Colors } from '@/constants/theme';
+import { formatGHS } from '@/lib/currency';
+import {
+  getCategories,
+  getProducts,
+  getProductPricing,
+  getProductImage,
+  getProductCategoryName,
+  getProductRating,
+  getProductInStock,
+  getDefaultVariant,
+  getCartItemId,
+  type ApiCategory,
+  type ApiProduct,
+  type ApiPagination,
+  type ProductSort,
+} from '@/lib/catalog';
+import { useCartStore } from '@/stores/cart.store';
+import { useToastStore } from '@/stores/toast.store';
+
+const PAGE_SIZE = 12;
+const SKELETON_COUNT = 6;
+
+const SORT_OPTIONS: { value: ProductSort; label: string }[] = [
+  { value: 'newest', label: 'Sort by latest' },
+  { value: 'price_asc', label: 'Price: low to high' },
+  { value: 'price_desc', label: 'Price: high to low' },
+  { value: 'name_asc', label: 'Name: A to Z' },
+];
+
 
 export default function ShopScreen() {
   const router = useRouter();
+  const routeParams = useLocalSearchParams<{ category?: string; q?: string }>();
   const { width } = useWindowDimensions();
   const isDesktop = width > 768;
+  const scrollRef = useRef<ScrollView>(null);
+  const hasLoadedOnceRef = useRef(false);
+  const addItem = useCartStore((s) => s.addItem);
 
-  // Filter States
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
-  const [selectedRating, setSelectedRating] = useState<number | null>(null);
-  const [maxPrice, setMaxPrice] = useState(2000);
-  const [sortBy, setSortBy] = useState('Sort by latest');
+  // Quick "Add to cart" from a product card — uses the same default variant
+  // as the price shown on the card (mirrors the web shop's pickDisplayVariant).
+  const addProductToCart = useCallback(
+    (prod: ApiProduct) => {
+      const { price } = getProductPricing(prod);
+      const variant = getDefaultVariant(prod);
+      addItem({
+        id: variant?.id ?? prod.id,
+        name: prod.name,
+        price,
+        image: getProductImage(prod) ?? '',
+      });
+      useToastStore.getState().show(`${prod.name} added to cart`);
+    },
+    [addItem],
+  );
+
+  // Sidebar inputs, staged until "Apply Filters" is pressed (mirrors the
+  // web shop's ShopSidebar — src/components/shop/shop-sidebar.tsx).
+  const [searchInput, setSearchInput] = useState(routeParams.q ?? '');
+  const [stagedCategories, setStagedCategories] = useState<string[]>(
+    routeParams.category ? [routeParams.category] : [],
+  );
+  const [stagedRating, setStagedRating] = useState<number | null>(null);
+
+  // Committed filters actually sent to the API.
+  const [appliedSearch, setAppliedSearch] = useState(routeParams.q ?? '');
+  const [appliedCategories, setAppliedCategories] = useState<string[]>(
+    routeParams.category ? [routeParams.category] : [],
+  );
+  const [appliedRating, setAppliedRating] = useState<number | null>(null);
+
+  const [sortBy, setSortBy] = useState<ProductSort>('newest');
+  const [showSortMenu, setShowSortMenu] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-  const [currentPage, setCurrentPage] = useState(1);
+  const [page, setPage] = useState(1);
   const [showMobileFilterDrawer, setShowMobileFilterDrawer] = useState(false);
 
-  const categories = ['Groceries', 'Beauty', 'Home & Garden', 'Fashion', 'Electronics'];
+  const [categories, setCategories] = useState<ApiCategory[]>([]);
+  const [products, setProducts] = useState<ApiProduct[]>([]);
+  const [pagination, setPagination] = useState<ApiPagination | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [fetchingProducts, setFetchingProducts] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const allProducts = [
-    {
-      id: 'sp-1',
-      name: 'Quinoa & Grain Bowl Kit',
-      category: 'Groceries',
-      price: 110.0,
-      rating: 0,
-      reviews: 0,
-      image: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?q=80&w=400&auto=format&fit=crop',
-    },
-    {
-      id: 'sp-2',
-      name: 'Aged Balsamic Vinegar',
-      category: 'Groceries',
-      price: 220.0,
-      rating: 0,
-      reviews: 0,
-      image: 'https://images.unsplash.com/photo-1474979266404-7eaacbcd87c5?q=80&w=400&auto=format&fit=crop',
-    },
-    {
-      id: 'sp-3',
-      name: 'Himalayan Pink Salt',
-      category: 'Groceries',
-      price: 45.0,
-      rating: 5.0,
-      reviews: 3,
-      image: 'https://images.unsplash.com/photo-1518110165389-9e8a867c4e51?q=80&w=400&auto=format&fit=crop',
-    },
-    {
-      id: 'sp-4',
-      name: 'Artisan Chocolate Bar Set',
-      category: 'Groceries',
-      price: 145.0,
-      rating: 0,
-      reviews: 0,
-      image: 'https://images.unsplash.com/photo-1541781774459-bb2af2f05b55?q=80&w=400&auto=format&fit=crop',
-    },
-    {
-      id: 'sp-5',
-      name: 'Manuka Honey MGO 400+',
-      category: 'Groceries',
-      price: 380.0,
-      rating: 0,
-      reviews: 0,
-      image: 'https://images.unsplash.com/photo-1587049352847-4a222e784d38?q=80&w=400&auto=format&fit=crop',
-    },
-    {
-      id: 'sp-6',
-      name: 'Organic Matcha Powder',
-      category: 'Groceries',
-      price: 240.0,
-      rating: 0,
-      reviews: 0,
-      image: 'https://images.unsplash.com/photo-1576092768241-dec231879fc3?q=80&w=400&auto=format&fit=crop',
-    },
-    {
-      id: 'sp-7',
-      name: 'Extra Virgin Olive Oil',
-      category: 'Groceries',
-      price: 120.0,
-      rating: 0,
-      reviews: 0,
-      image: 'https://images.unsplash.com/photo-1474979266404-7eaacbcd87c5?q=80&w=400&auto=format&fit=crop',
-    },
-    {
-      id: 'sp-8',
-      name: 'Premium Roast Coffee Beans',
-      category: 'Groceries',
-      price: 85.0,
-      rating: 0,
-      reviews: 0,
-      image: 'https://images.unsplash.com/photo-1559056199-641a0ac8b55e?q=80&w=400&auto=format&fit=crop',
-    },
-    {
-      id: 'sp-9',
-      name: 'Organic Beard Oil',
-      category: 'Beauty',
-      price: 150.0,
-      rating: 0,
-      reviews: 0,
-      image: 'https://images.unsplash.com/photo-1626285861696-9f0bf5a49c6d?q=80&w=400&auto=format&fit=crop',
-    },
-    {
-      id: 'sp-10',
-      name: 'Vitamin C Brightening Mask',
-      category: 'Beauty',
-      price: 299.0,
-      rating: 0,
-      reviews: 0,
-      image: 'https://images.unsplash.com/photo-1596462502278-27bfdc403348?q=80&w=400&auto=format&fit=crop',
-    },
-    {
-      id: 'sp-11',
-      name: 'Mineral Sunscreen SPF 50',
-      category: 'Beauty',
-      price: 180.0,
-      rating: 0,
-      reviews: 0,
-      image: 'https://images.unsplash.com/photo-1556228720-195a672e8a03?q=80&w=400&auto=format&fit=crop',
-    },
-    {
-      id: 'sp-12',
-      name: 'Matte Lipstick Quad',
-      category: 'Beauty',
-      price: 480.0,
-      rating: 0,
-      reviews: 0,
-      image: 'https://images.unsplash.com/photo-1586495777744-4413f21062fa?q=80&w=400&auto=format&fit=crop',
-    },
-  ];
+  // Category sidebar list — fetched once, independent of product filters.
+  useEffect(() => {
+    let cancelled = false;
+    getCategories()
+      .then((cats) => {
+        if (!cancelled) setCategories(cats);
+      })
+      .catch(() => {
+        // The category list is a nice-to-have filter; don't block the shop for it.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
-  const toggleCategory = (cat: string) => {
-    if (selectedCategories.includes(cat)) {
-      setSelectedCategories(selectedCategories.filter((c) => c !== cat));
+  // Re-sync when arriving here with new route params, e.g. tapping a
+  // category on the home screen (router.push({ pathname: '/shop', params: { category } })).
+  useEffect(() => {
+    const cat = routeParams.category;
+    const q = routeParams.q ?? '';
+    setStagedCategories(cat ? [cat] : []);
+    setSearchInput(q);
+    setAppliedCategories(cat ? [cat] : []);
+    setAppliedSearch(q);
+    setPage(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [routeParams.category, routeParams.q]);
+
+  const loadProducts = useCallback(async () => {
+    if (!hasLoadedOnceRef.current) {
+      setLoading(true);
     } else {
-      setSelectedCategories([...selectedCategories, cat]);
+      setFetchingProducts(true);
     }
+    setError(null);
+    try {
+      const result = await getProducts({
+        q: appliedSearch || undefined,
+        categories: appliedCategories.length ? appliedCategories : undefined,
+        rating: appliedRating ?? undefined,
+        sort: sortBy,
+        page,
+        limit: PAGE_SIZE,
+      });
+      setProducts(result.products);
+      setPagination(result.pagination);
+    } catch (e) {
+      setError(
+        e instanceof Error && e.name === 'AbortError'
+          ? 'The request timed out. Check that the backend is running and reachable.'
+          : e instanceof Error
+            ? e.message
+            : 'Could not load products right now.',
+      );
+    } finally {
+      hasLoadedOnceRef.current = true;
+      setLoading(false);
+      setFetchingProducts(false);
+    }
+  }, [appliedSearch, appliedCategories, appliedRating, sortBy, page]);
+
+  useEffect(() => {
+    loadProducts();
+  }, [loadProducts]);
+
+  const goToPage = (p: number) => {
+    setPage(p);
+    scrollRef.current?.scrollTo({ y: 0, animated: true });
+  };
+
+  const toggleCategory = (slug: string) => {
+    setStagedCategories((prev) =>
+      prev.includes(slug) ? prev.filter((c) => c !== slug) : [...prev, slug],
+    );
+  };
+
+  const handleApplyFilters = () => {
+    setAppliedSearch(searchInput);
+    setAppliedCategories(stagedCategories);
+    setAppliedRating(stagedRating);
+    setPage(1);
+    setShowMobileFilterDrawer(false);
   };
 
   const handleResetFilters = () => {
-    setSearchQuery('');
-    setSelectedCategories([]);
-    setSelectedRating(null);
-    setMaxPrice(2000);
+    setSearchInput('');
+    setStagedCategories([]);
+    setStagedRating(null);
+    setAppliedSearch('');
+    setAppliedCategories([]);
+    setAppliedRating(null);
+    setPage(1);
   };
 
-  // Filtered Products Calculation
-  const filteredProducts = allProducts.filter((prod) => {
-    const matchesSearch = prod.name.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCategory =
-      selectedCategories.length === 0 || selectedCategories.includes(prod.category);
-    const matchesRating = selectedRating === null || prod.rating >= selectedRating;
-    const matchesPrice = prod.price <= maxPrice;
-    return matchesSearch && matchesCategory && matchesRating && matchesPrice;
-  });
+  const handleSelectSort = (value: ProductSort) => {
+    setSortBy(value);
+    setPage(1);
+    setShowSortMenu(false);
+  };
 
   const renderStars = (ratingCount: number) => {
     const stars = [];
@@ -184,8 +215,77 @@ export default function ShopScreen() {
     return stars;
   };
 
+  const totalProducts = pagination?.total ?? products.length;
+  const totalPages = pagination?.totalPages ?? 1;
+  const currentSortLabel =
+    SORT_OPTIONS.find((o) => o.value === sortBy)?.label ?? 'Sort by latest';
+
+  if (loading) {
+    return (
+      <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+        <MartfuryHeader />
+        <View style={styles.bodyWrapper}>
+          <View style={styles.mainContentContainer}>
+            <View style={[styles.shopLayoutRow, !isDesktop && styles.shopLayoutMobile]}>
+              {isDesktop && (
+                <View style={styles.sidebarContainer}>
+                  <View style={styles.filterSection}>
+                    <Skeleton width={70} height={12} />
+                    <Skeleton height={38} borderRadius={4} />
+                  </View>
+                  <View style={styles.filterSection}>
+                    <Skeleton width={100} height={12} />
+                    <View style={styles.checkboxList}>
+                      {[70, 55, 65, 45, 60].map((w, i) => (
+                        <Skeleton key={i} width={`${w}%`} height={13} />
+                      ))}
+                    </View>
+                  </View>
+                  <View style={styles.filterSection}>
+                    <Skeleton width={90} height={12} />
+                    <View style={styles.ratingFilterList}>
+                      {[0, 1, 2, 3, 4].map((i) => (
+                        <Skeleton key={i} width="50%" height={13} />
+                      ))}
+                    </View>
+                  </View>
+                </View>
+              )}
+
+              <View style={styles.catalogContainer}>
+                <View style={styles.catalogTopBar}>
+                  <Skeleton width={120} height={13} />
+                  <Skeleton width={160} height={30} borderRadius={4} />
+                </View>
+
+                <View style={styles.productsGrid}>
+                  {Array.from({ length: SKELETON_COUNT }).map((_, i) => (
+                    <ProductCardSkeleton key={i} layout="grid" />
+                  ))}
+                </View>
+              </View>
+            </View>
+          </View>
+        </View>
+      </ScrollView>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={[styles.stateContainer, { backgroundColor: Colors.light.background }]}>
+        <Icon name="close-circle" size={64} color={Colors.light.error} />
+        <Text style={styles.stateTitle}>Couldn't load the shop</Text>
+        <Text style={styles.stateSubtitle}>{error}</Text>
+        <TouchableOpacity style={styles.stateButton} onPress={() => loadProducts()}>
+          <Text style={styles.stateButtonText}>Try Again</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+    <ScrollView ref={scrollRef} style={styles.container} showsVerticalScrollIndicator={false}>
       {/* Martfury Top Header */}
       <MartfuryHeader />
 
@@ -216,8 +316,10 @@ export default function ShopScreen() {
                       style={styles.searchInput}
                       placeholder="Search products..."
                       placeholderTextColor="#999999"
-                      value={searchQuery}
-                      onChangeText={setSearchQuery}
+                      value={searchInput}
+                      onChangeText={setSearchInput}
+                      onSubmitEditing={handleApplyFilters}
+                      returnKeyType="search"
                     />
                     <Icon name="search-outline" size={16} color="#999999" />
                   </View>
@@ -228,12 +330,12 @@ export default function ShopScreen() {
                   <Text style={styles.filterSectionTitle}>CATEGORIES</Text>
                   <View style={styles.checkboxList}>
                     {categories.map((cat) => {
-                      const isChecked = selectedCategories.includes(cat);
+                      const isChecked = stagedCategories.includes(cat.slug);
                       return (
                         <TouchableOpacity
-                          key={cat}
+                          key={cat.id}
                           style={styles.checkboxRow}
-                          onPress={() => toggleCategory(cat)}
+                          onPress={() => toggleCategory(cat.slug)}
                         >
                           <View
                             style={[
@@ -245,7 +347,7 @@ export default function ShopScreen() {
                               <Icon name="checkmark-circle" size={12} color="#ffffff" />
                             )}
                           </View>
-                          <Text style={styles.checkboxLabel}>{cat}</Text>
+                          <Text style={styles.checkboxLabel}>{cat.name}</Text>
                         </TouchableOpacity>
                       );
                     })}
@@ -257,13 +359,13 @@ export default function ShopScreen() {
                   <Text style={styles.filterSectionTitle}>BY RATING</Text>
                   <View style={styles.ratingFilterList}>
                     {[5, 4, 3, 2, 1].map((stars) => {
-                      const isSelected = selectedRating === stars;
+                      const isSelected = stagedRating === stars;
                       return (
                         <TouchableOpacity
                           key={stars}
                           style={styles.ratingRowOption}
                           onPress={() =>
-                            setSelectedRating(isSelected ? null : stars)
+                            setStagedRating(isSelected ? null : stars)
                           }
                         >
                           <View
@@ -282,24 +384,11 @@ export default function ShopScreen() {
                   </View>
                 </View>
 
-                {/* 4. BY PRICE */}
-                <View style={styles.filterSection}>
-                  <Text style={styles.filterSectionTitle}>BY PRICE</Text>
-                  <View style={styles.priceSliderTrack}>
-                    <View style={styles.priceSliderFill} />
-                    <View style={styles.priceSliderThumbLeft} />
-                    <View style={styles.priceSliderThumbRight} />
-                  </View>
-                  <Text style={styles.priceLabelText}>
-                    Price: <Text style={styles.priceBold}>$0 — ${maxPrice}</Text>
-                  </Text>
-                </View>
-
-                {/* 5. FILTER ACTIONS */}
+                {/* 4. FILTER ACTIONS */}
                 <View style={styles.filterActions}>
                   <TouchableOpacity
                     style={styles.applyFiltersButton}
-                    onPress={() => setShowMobileFilterDrawer(false)}
+                    onPress={handleApplyFilters}
                   >
                     <Text style={styles.applyFiltersButtonText}>Apply Filters</Text>
                   </TouchableOpacity>
@@ -318,9 +407,7 @@ export default function ShopScreen() {
               {/* Top Controls Bar */}
               <View style={styles.catalogTopBar}>
                 <Text style={styles.foundCountText}>
-                  <Text style={styles.foundCountBold}>
-                    {filteredProducts.length}
-                  </Text>{' '}
+                  <Text style={styles.foundCountBold}>{totalProducts}</Text>{' '}
                   products found
                 </Text>
 
@@ -328,8 +415,11 @@ export default function ShopScreen() {
                   {/* Sort Dropdown */}
                   <View style={styles.sortDropdown}>
                     <Text style={styles.sortDropdownLabel}>Sort by:</Text>
-                    <TouchableOpacity style={styles.sortDropdownSelect}>
-                      <Text style={styles.sortDropdownText}>{sortBy}</Text>
+                    <TouchableOpacity
+                      style={styles.sortDropdownSelect}
+                      onPress={() => setShowSortMenu(true)}
+                    >
+                      <Text style={styles.sortDropdownText}>{currentSortLabel}</Text>
                       <Icon name="chevron-down" size={14} color="#666666" />
                     </TouchableOpacity>
                   </View>
@@ -366,79 +456,210 @@ export default function ShopScreen() {
                 </View>
               </View>
 
-              {/* PRODUCTS GRID OR LIST */}
-              {viewMode === 'grid' ? (
+              {fetchingProducts ? (
+                viewMode === 'grid' ? (
+                  <View style={styles.productsGrid}>
+                    {Array.from({ length: SKELETON_COUNT }).map((_, i) => (
+                      <ProductCardSkeleton key={i} layout="grid" />
+                    ))}
+                  </View>
+                ) : (
+                  <View style={styles.productsList}>
+                    {Array.from({ length: SKELETON_COUNT }).map((_, i) => (
+                      <ProductCardSkeleton key={i} layout="list" />
+                    ))}
+                  </View>
+                )
+              ) : products.length === 0 ? (
+                <View style={styles.emptyState}>
+                  <Icon name="search-outline" size={40} color="#cccccc" />
+                  <Text style={styles.emptyStateTitle}>No products found</Text>
+                  <Text style={styles.emptyStateSubtitle}>
+                    Try adjusting your search or filters.
+                  </Text>
+                </View>
+              ) : viewMode === 'grid' ? (
                 <View style={styles.productsGrid}>
-                  {filteredProducts.map((prod) => (
-                    <ProductCard
-                      key={prod.id}
-                      id={prod.id}
-                      name={prod.name}
-                      price={prod.price}
-                      image={prod.image}
-                      category={prod.category}
-                      rating={prod.rating}
-                      reviews={prod.reviews}
-                      layout="grid"
-                      onPress={() => router.push(`/product/${prod.id}`)}
-                      onAddToCart={() => router.push('/cart')}
-                    />
-                  ))}
+                  {products.map((prod) => {
+                    const { price, oldPrice } = getProductPricing(prod);
+                    const { rating, reviews } = getProductRating(prod);
+                    return (
+                      <ProductCard
+                        key={prod.id}
+                        id={prod.id}
+                        cartItemId={getCartItemId(prod)}
+                        name={prod.name}
+                        price={formatGHS(price, false)}
+                        originalPrice={oldPrice ? formatGHS(oldPrice, false) : undefined}
+                        image={getProductImage(prod) ?? ''}
+                        category={getProductCategoryName(prod) ?? 'Shop'}
+                        rating={rating}
+                        reviews={reviews}
+                        inStock={getProductInStock(prod)}
+                        badge={oldPrice ? 'SALE' : undefined}
+                        layout="grid"
+                        onPress={() => router.push(`/product/${prod.id}`)}
+                        onAddToCart={() => addProductToCart(prod)}
+                      />
+                    );
+                  })}
                 </View>
               ) : (
                 /* LIST VIEW MODE */
                 <View style={styles.productsList}>
-                  {filteredProducts.map((prod) => (
-                    <ProductCard
-                      key={prod.id}
-                      id={prod.id}
-                      name={prod.name}
-                      price={prod.price}
-                      image={prod.image}
-                      category={prod.category}
-                      rating={prod.rating}
-                      reviews={prod.reviews}
-                      layout="list"
-                      onPress={() => router.push(`/product/${prod.id}`)}
-                      onAddToCart={() => router.push('/cart')}
-                      onAddToWishlist={() => router.push('/shop')}
-                    />
-                  ))}
+                  {products.map((prod) => {
+                    const { price, oldPrice } = getProductPricing(prod);
+                    const { rating, reviews } = getProductRating(prod);
+                    return (
+                      <ProductCard
+                        key={prod.id}
+                        id={prod.id}
+                        cartItemId={getCartItemId(prod)}
+                        name={prod.name}
+                        price={formatGHS(price, false)}
+                        originalPrice={oldPrice ? formatGHS(oldPrice, false) : undefined}
+                        image={getProductImage(prod) ?? ''}
+                        category={getProductCategoryName(prod) ?? 'Shop'}
+                        rating={rating}
+                        reviews={reviews}
+                        inStock={getProductInStock(prod)}
+                        badge={oldPrice ? 'SALE' : undefined}
+                        layout="list"
+                        onPress={() => router.push(`/product/${prod.id}`)}
+                        onAddToCart={() => addProductToCart(prod)}
+                      />
+                    );
+                  })}
                 </View>
               )}
 
               {/* PAGINATION */}
-              <View style={styles.paginationContainer}>
-                <TouchableOpacity style={styles.paginationButton}>
-                  <Text style={styles.paginationText}>Prev</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.paginationButton, styles.paginationButtonActive]}
-                >
-                  <Text style={styles.paginationTextActive}>1</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.paginationButton}>
-                  <Text style={styles.paginationText}>2</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.paginationButton}>
-                  <Text style={styles.paginationText}>3</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.paginationButton}>
-                  <Text style={styles.paginationText}>Next</Text>
-                </TouchableOpacity>
-              </View>
+              {totalPages > 1 && (
+                <View style={styles.paginationContainer}>
+                  <TouchableOpacity
+                    style={styles.paginationButton}
+                    disabled={!pagination?.hasPrev}
+                    onPress={() => goToPage(page - 1)}
+                  >
+                    <Text
+                      style={[
+                        styles.paginationText,
+                        !pagination?.hasPrev && styles.paginationTextDisabled,
+                      ]}
+                    >
+                      Prev
+                    </Text>
+                  </TouchableOpacity>
+
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+                    <TouchableOpacity
+                      key={p}
+                      style={[
+                        styles.paginationButton,
+                        p === page && styles.paginationButtonActive,
+                      ]}
+                      onPress={() => goToPage(p)}
+                    >
+                      <Text
+                        style={p === page ? styles.paginationTextActive : styles.paginationText}
+                      >
+                        {p}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+
+                  <TouchableOpacity
+                    style={styles.paginationButton}
+                    disabled={!pagination?.hasNext}
+                    onPress={() => goToPage(page + 1)}
+                  >
+                    <Text
+                      style={[
+                        styles.paginationText,
+                        !pagination?.hasNext && styles.paginationTextDisabled,
+                      ]}
+                    >
+                      Next
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              )}
             </View>
           </View>
         </View>
       </View>
 
-      {/* Martfury Bottom Footer */}
-      <MartfuryFooter />
+      {/* SORT OPTIONS MODAL */}
+      <Modal
+        visible={showSortMenu}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowSortMenu(false)}
+      >
+        <TouchableOpacity
+          style={styles.sortModalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowSortMenu(false)}
+        >
+          <View style={styles.sortModalCard}>
+            {SORT_OPTIONS.map((opt) => (
+              <TouchableOpacity
+                key={opt.value}
+                style={styles.sortModalOption}
+                onPress={() => handleSelectSort(opt.value)}
+              >
+                <Text
+                  style={[
+                    styles.sortModalOptionText,
+                    opt.value === sortBy && styles.sortModalOptionTextActive,
+                  ]}
+                >
+                  {opt.label}
+                </Text>
+                {opt.value === sortBy && (
+                  <Icon name="checkmark-circle" size={16} color={Colors.light.primary} />
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
+  stateContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 12,
+    padding: 24,
+  },
+  stateTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: Colors.light.text,
+    marginTop: 8,
+  },
+  stateSubtitle: {
+    fontSize: 14,
+    lineHeight: 20,
+    textAlign: 'center',
+    color: Colors.light.textSecondary,
+  },
+  stateButton: {
+    backgroundColor: Colors.light.primary,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 12,
+    marginTop: 8,
+  },
+  stateButtonText: {
+    color: '#ffffff',
+    fontSize: 15,
+    fontWeight: '700',
+  },
   container: {
     flex: 1,
     backgroundColor: Colors.light.background,
@@ -566,47 +787,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#666666',
   },
-  priceSliderTrack: {
-    height: 4,
-    backgroundColor: '#e1e4e8',
-    borderRadius: 2,
-    position: 'relative',
-    marginVertical: 10,
-  },
-  priceSliderFill: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 0,
-    bottom: 0,
-    backgroundColor: Colors.light.primary,
-  },
-  priceSliderThumbLeft: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    backgroundColor: Colors.light.primary,
-    position: 'absolute',
-    left: 0,
-    top: -5,
-  },
-  priceSliderThumbRight: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    backgroundColor: Colors.light.primary,
-    position: 'absolute',
-    right: 0,
-    top: -5,
-  },
-  priceLabelText: {
-    fontSize: 12,
-    color: '#666666',
-  },
-  priceBold: {
-    fontWeight: '700',
-    color: '#222222',
-  },
   filterActions: {
     gap: 10,
     marginTop: 6,
@@ -707,6 +887,27 @@ const styles = StyleSheet.create({
     backgroundColor: '#e8f0fe',
   },
 
+  /* EMPTY STATE */
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 60,
+    backgroundColor: '#ffffff',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e1e4e8',
+  },
+  emptyStateTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#333333',
+  },
+  emptyStateSubtitle: {
+    fontSize: 13,
+    color: '#888888',
+  },
+
   /* GRID MODE */
   productsGrid: {
     flexDirection: 'row',
@@ -714,87 +915,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     rowGap: 8,
   },
-  gridProductCard: {
-    width: '48.5%',
-    backgroundColor: '#ffffff',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#e1e4e8',
-    overflow: 'hidden',
-  },
-  cardImageWrapper: {
-    height: 140,
-    backgroundColor: '#f9f9f9',
-  },
-  cardImage: {
-    width: '100%',
-    height: '100%',
-  },
-  cardInfo: {
-    padding: 10,
-    gap: 6,
-  },
-  gridProductTitle: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: Colors.light.primary,
-    height: 36,
-  },
-  cardRatingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  reviewsCountText: {
-    fontSize: 11,
-    color: '#888888',
-  },
-  gridProductPrice: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#222222',
-  },
-  addCartBlueButton: {
-    backgroundColor: Colors.light.primary,
-    paddingVertical: 9,
-    borderRadius: 4,
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  addCartBlueButtonText: {
-    color: '#ffffff',
-    fontWeight: '700',
-    fontSize: 12,
-  },
 
   /* LIST MODE */
   productsList: {
     gap: 8,
-  },
-  listProductCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#e1e4e8',
-    padding: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-  },
-  listCardImage: {
-    width: 100,
-    height: 100,
-    borderRadius: 6,
-  },
-  listCardDetails: {
-    flex: 1,
-    gap: 6,
-  },
-  listAddCartButton: {
-    backgroundColor: Colors.light.primary,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 4,
   },
 
   /* PAGINATION */
@@ -802,6 +926,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
+    flexWrap: 'wrap',
     gap: 8,
     marginTop: 10,
   },
@@ -821,8 +946,43 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#666666',
   },
+  paginationTextDisabled: {
+    color: '#cccccc',
+  },
   paginationTextActive: {
     fontSize: 13,
+    color: Colors.light.primary,
+    fontWeight: '700',
+  },
+
+  /* SORT MODAL */
+  sortModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.35)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  sortModalCard: {
+    width: '100%',
+    maxWidth: 320,
+    backgroundColor: '#ffffff',
+    borderRadius: 8,
+    paddingVertical: 8,
+    overflow: 'hidden',
+  },
+  sortModalOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+  },
+  sortModalOptionText: {
+    fontSize: 14,
+    color: '#333333',
+  },
+  sortModalOptionTextActive: {
     color: Colors.light.primary,
     fontWeight: '700',
   },

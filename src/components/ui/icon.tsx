@@ -44,6 +44,7 @@ export type IconName =
   | 'people-outline'
   | 'create-outline'
   | 'headset-outline'
+  | 'heart'
   | 'heart-outline'
   | 'truck-outline'
   | 'refresh-outline'
@@ -102,6 +103,7 @@ const symbolMap: Record<IconName, { ios: string; android: string; web: string; t
   'people-outline': { ios: 'person.3', android: 'group', web: 'group', textFallback: '👥' },
   'create-outline': { ios: 'square.and.pencil', android: 'edit', web: 'edit', textFallback: '✏️' },
   'headset-outline': { ios: 'headphones', android: 'headset', web: 'headset', textFallback: '🎧' },
+  'heart': { ios: 'heart.fill', android: 'favorite', web: 'favorite', textFallback: '♥' },
   'heart-outline': { ios: 'heart', android: 'favorite_border', web: 'favorite_border', textFallback: '♡' },
   'truck-outline': { ios: 'shippingbox', android: 'local_shipping', web: 'local_shipping', textFallback: '🚚' },
   'refresh-outline': { ios: 'arrow.clockwise', android: 'autorenew', web: 'autorenew', textFallback: '🔄' },

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
   StyleSheet,
   View,
@@ -11,51 +11,32 @@ import { useRouter } from 'expo-router';
 import { Icon } from '@/components/ui/icon';
 import { SafeImage } from '@/components/ui/safe-image';
 import { Colors } from '@/constants/theme';
+import { formatGHS } from '@/lib/currency';
+import { useCartStore } from '@/stores/cart.store';
 
 export default function CartScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const isDesktop = width > 768;
 
-  const [cartItems, setCartItems] = useState([
-    {
-      id: 'c1',
-      name: 'Wireless Noise-Canceling Headphones',
-      price: 180,
-      image: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?q=80&w=600&auto=format&fit=crop',
-      quantity: 1,
-      vendor: 'AudioTech Store',
-    },
-    {
-      id: 'c2',
-      name: 'Organic Cold Pressed Extra Virgin Olive Oil',
-      price: 45,
-      image: 'https://images.unsplash.com/photo-1474979266404-7eaacbcd87c5?q=80&w=600&auto=format&fit=crop',
-      quantity: 2,
-      vendor: 'Fresh Market',
-    },
-  ]);
+  const cartItems = useCartStore((s) => s.items);
+  const increaseQty = useCartStore((s) => s.increaseQty);
+  const decreaseQty = useCartStore((s) => s.decreaseQty);
+  const removeItem = useCartStore((s) => s.removeItem);
+  const clearCart = useCartStore((s) => s.clearCart);
+  const subtotal = useCartStore((s) => s.getTotal());
 
   const updateQuantity = (id: string, delta: number) => {
-    setCartItems((prev) =>
-      prev
-        .map((item) => {
-          if (item.id === id) {
-            const newQty = item.quantity + delta;
-            return newQty > 0 ? { ...item, quantity: newQty } : null;
-          }
-          return item;
-        })
-        .filter(Boolean) as any
-    );
+    if (delta > 0) increaseQty(id);
+    else decreaseQty(id);
   };
 
-  const removeItem = (id: string) => {
-    setCartItems((prev) => prev.filter((item) => item.id !== id));
-  };
-
-  const subtotal = cartItems.reduce((acc, item) => acc + item.price * item.quantity, 0);
-  const shippingFee = subtotal > 150 || subtotal === 0 ? 0 : 15;
+  // Shipping is free for now — mirrors the web app (its cart sheet and
+  // checkout both treat shipping as $0/Free: see cart.store.ts's cart sheet
+  // and checkout/page.tsx's `const shipping = 0; // Demo shipping/tax`).
+  // There's no live shipping calculation on the backend, so total = subtotal
+  // rather than inventing a flat fee here.
+  const shippingFee = 0;
   const total = subtotal + shippingFee;
 
   return (
@@ -97,7 +78,7 @@ export default function CartScreen() {
                     <Text style={styles.cardTitle}>
                       Shopping Cart ({cartItems.length} {cartItems.length === 1 ? 'item' : 'items'})
                     </Text>
-                    <TouchableOpacity onPress={() => setCartItems([])}>
+                    <TouchableOpacity onPress={clearCart}>
                       <Text style={styles.clearCartText}>Clear Cart</Text>
                     </TouchableOpacity>
                   </View>
@@ -116,11 +97,10 @@ export default function CartScreen() {
 
                       {/* Product Details */}
                       <View style={styles.itemDetails}>
-                        <Text style={styles.itemVendor}>{item.vendor}</Text>
                         <Text style={styles.itemName} numberOfLines={2}>
                           {item.name}
                         </Text>
-                        <Text style={styles.itemUnitPrice}>${item.price.toFixed(2)}</Text>
+                        <Text style={styles.itemUnitPrice}>{formatGHS(item.price, false)} each</Text>
 
                         {/* Quantity Controls */}
                         <View style={styles.qtyContainer}>
@@ -130,7 +110,7 @@ export default function CartScreen() {
                           >
                             <Icon name="remove" size={14} color="#333333" />
                           </TouchableOpacity>
-                          <Text style={styles.qtyValue}>{item.quantity}</Text>
+                          <Text style={styles.qtyValue}>{item.qty}</Text>
                           <TouchableOpacity
                             style={styles.qtyButton}
                             onPress={() => updateQuantity(item.id, 1)}
@@ -143,7 +123,7 @@ export default function CartScreen() {
                       {/* Right Item Actions & Total */}
                       <View style={styles.itemRightActions}>
                         <Text style={styles.itemSubtotalPrice}>
-                          ${(item.price * item.quantity).toFixed(2)}
+                          {formatGHS(item.price * item.qty, false)}
                         </Text>
                         <TouchableOpacity
                           style={styles.removeIconButton}
@@ -174,7 +154,7 @@ export default function CartScreen() {
 
                     <View style={styles.summaryRow}>
                       <Text style={styles.summaryLabel}>Subtotal</Text>
-                      <Text style={styles.summaryValue}>${subtotal.toFixed(2)}</Text>
+                      <Text style={styles.summaryValue}>{formatGHS(subtotal, false)}</Text>
                     </View>
 
                     <View style={styles.summaryRow}>
@@ -183,7 +163,7 @@ export default function CartScreen() {
                         {shippingFee === 0 ? (
                           <Text style={styles.freeShippingText}>FREE</Text>
                         ) : (
-                          `$${shippingFee.toFixed(2)}`
+                          formatGHS(shippingFee, false)
                         )}
                       </Text>
                     </View>
@@ -192,7 +172,7 @@ export default function CartScreen() {
 
                     <View style={styles.totalRow}>
                       <Text style={styles.totalLabel}>Total</Text>
-                      <Text style={styles.totalValue}>${total.toFixed(2)}</Text>
+                      <Text style={styles.totalValue}>{formatGHS(total, false)}</Text>
                     </View>
 
                     {/* Checkout Button */}
@@ -229,7 +209,7 @@ export default function CartScreen() {
         <View style={styles.mobileFixedBottomBar}>
           <View style={styles.mobileSummaryInfo}>
             <Text style={styles.mobileTotalLabel}>Total Amount</Text>
-            <Text style={styles.mobileTotalValue}>${total.toFixed(2)}</Text>
+            <Text style={styles.mobileTotalValue}>{formatGHS(total, false)}</Text>
           </View>
           <TouchableOpacity
             style={styles.mobileCheckoutButton}

@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { useRouter, type Href } from 'expo-router';
 import { Icon } from '@/components/ui/icon';
+import { Skeleton } from '@/components/ui/skeleton';
 
 import { Colors } from '@/constants/theme';
 import { useSession, signOut } from '@/lib/auth-client';
@@ -42,19 +43,35 @@ export default function ProfileScreen() {
       title: 'Shopping',
       items: [
         { icon: 'receipt-outline', label: 'My Orders', route: '/orders' },
-        { icon: 'heart-outline', label: 'Wishlist', comingSoon: true },
+        { icon: 'heart-outline', label: 'Wishlist', route: '/wishlist' },
       ],
     },
     {
       title: 'Account Settings',
       items: [
         { icon: 'person-outline', label: 'Edit Profile', route: '/profile/edit' },
+        { icon: 'lock-closed-outline', label: 'Account Security', route: '/profile/security' },
       ],
     },
     {
       title: 'Support',
       items: [
-        { icon: 'headset-outline', label: 'Help & Support', comingSoon: true },
+        { icon: 'list-outline', label: 'FAQ', route: '/legal/faq' },
+        { icon: 'call-outline', label: 'Help & Support', route: '/contact' },
+      ],
+    },
+    {
+      title: 'Company',
+      items: [
+        { icon: 'sparkles-outline', label: 'About Us', route: '/about' },
+      ],
+    },
+    {
+      title: 'Legal',
+      items: [
+        { icon: 'receipt-outline', label: 'Terms & Conditions', route: '/legal/terms' },
+        { icon: 'shield-checkmark-outline', label: 'Privacy Policy', route: '/legal/privacy-policy' },
+        { icon: 'truck-outline', label: 'Shipping and Returns', route: '/legal/shipping-returns' },
       ],
     },
   ];
@@ -87,15 +104,11 @@ export default function ProfileScreen() {
     ]);
   };
 
-  if (isPending) {
-    return (
-      <View style={[styles.loadingContainer, { backgroundColor: theme.background }]}>
-        <ActivityIndicator color={theme.primary} />
-      </View>
-    );
-  }
-
-  if (error) {
+  // Only the profile card below (name/email/avatar) depends on this fetch —
+  // gate just that on isPending instead of blocking the whole screen, so the
+  // hardcoded menu sections can render immediately. The error and
+  // not-signed-in screens below still need the fetch to have settled first.
+  if (!isPending && error) {
     return (
       <View style={[styles.container, styles.centeredContainer, { backgroundColor: theme.background }]}>
         <Icon name="close-circle" size={64} color={theme.error} />
@@ -110,7 +123,7 @@ export default function ProfileScreen() {
     );
   }
 
-  if (!user) {
+  if (!isPending && !user) {
     return (
       <View style={[styles.container, styles.centeredContainer, { backgroundColor: theme.background }]}>
         <Icon name="person-circle-outline" size={64} color={theme.textSecondary} />
@@ -135,16 +148,27 @@ export default function ProfileScreen() {
 
   return (
     <ScrollView style={[styles.container, { backgroundColor: theme.background }]}>
-      {/* User Header Profile Card */}
-      <View style={[styles.profileCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
-        <View style={[styles.avatar, { backgroundColor: theme.primary }]}>
-          <Text style={styles.avatarText}>{initials}</Text>
+      {/* User Header Profile Card — the only part waiting on the session
+          fetch, so it's the only part that shows a skeleton. */}
+      {!isPending && user ? (
+        <View style={[styles.profileCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+          <View style={[styles.avatar, { backgroundColor: theme.primary }]}>
+            <Text style={styles.avatarText}>{initials}</Text>
+          </View>
+          <View style={styles.profileDetails}>
+            <Text style={[styles.userName, { color: theme.text }]}>{user.name}</Text>
+            <Text style={[styles.userEmail, { color: theme.textSecondary }]}>{user.email}</Text>
+          </View>
         </View>
-        <View style={styles.profileDetails}>
-          <Text style={[styles.userName, { color: theme.text }]}>{user.name}</Text>
-          <Text style={[styles.userEmail, { color: theme.textSecondary }]}>{user.email}</Text>
+      ) : (
+        <View style={[styles.profileCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+          <Skeleton width={60} height={60} borderRadius={30} />
+          <View style={[styles.profileDetails, styles.profileDetailsSkeleton]}>
+            <Skeleton width="55%" height={18} borderRadius={4} />
+            <Skeleton width="80%" height={13} borderRadius={4} />
+          </View>
         </View>
-      </View>
+      )}
 
       {/* Menu Options */}
       <View style={styles.menuContainer}>
@@ -189,7 +213,7 @@ export default function ProfileScreen() {
         <TouchableOpacity
           style={[styles.sectionCard, styles.signOutRow, { backgroundColor: theme.card, borderColor: theme.border }]}
           onPress={handleSignOut}
-          disabled={signingOut}
+          disabled={signingOut || isPending}
         >
           {signingOut ? (
             <ActivityIndicator color={theme.error} />
@@ -272,6 +296,10 @@ const styles = StyleSheet.create({
   },
   profileDetails: {
     gap: 2,
+  },
+  profileDetailsSkeleton: {
+    flex: 1,
+    gap: 8,
   },
   userName: {
     fontSize: 18,
