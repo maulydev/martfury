@@ -39,17 +39,22 @@ export default function ProfileScreen() {
 
   const menuSections: { title: string; items: MenuItem[] }[] = [
     {
-      title: 'Orders',
+      title: 'Shopping',
       items: [
         { icon: 'receipt-outline', label: 'My Orders', route: '/orders' },
+        { icon: 'heart-outline', label: 'Wishlist', comingSoon: true },
       ],
     },
     {
       title: 'Account Settings',
       items: [
         { icon: 'person-outline', label: 'Edit Profile', route: '/profile/edit' },
-        { icon: 'location-outline', label: 'Shipping Addresses', comingSoon: true },
-        { icon: 'card-outline', label: 'Payment Methods', comingSoon: true },
+      ],
+    },
+    {
+      title: 'Support',
+      items: [
+        { icon: 'headset-outline', label: 'Help & Support', comingSoon: true },
       ],
     },
   ];
