@@ -12,6 +12,7 @@ import {
 import * as WebBrowser from 'expo-web-browser';
 import { useRouter } from 'expo-router';
 import { Icon } from '@/components/ui/icon';
+import { PaymentGatewayPicker, GATEWAY_LABELS } from '@/components/ui/payment-gateway-picker';
 
 import { Colors } from '@/constants/theme';
 import { formatGHS } from '@/lib/currency';
@@ -205,7 +206,7 @@ export default function CheckoutScreen() {
           <View style={[styles.processingBanner, { backgroundColor: theme.primaryLight, borderColor: theme.primary }]}>
             <ActivityIndicator size="small" color={theme.primary} />
             <Text style={[styles.processingText, { color: theme.primary }]}>
-              Connecting to {gateway === 'stripe' ? 'Stripe' : 'Paystack'}…
+              Connecting to {GATEWAY_LABELS[gateway]}…
             </Text>
           </View>
         )}
@@ -398,45 +399,7 @@ export default function CheckoutScreen() {
             <Text style={[styles.cardTitle, { color: theme.text }]}>Payment Method</Text>
           </View>
 
-          <TouchableOpacity
-            style={[
-              styles.paymentOption,
-              {
-                backgroundColor: gateway === 'stripe' ? theme.primaryLight : theme.backgroundElement,
-                borderColor: gateway === 'stripe' ? theme.primary : theme.border,
-              },
-            ]}
-            onPress={() => setGateway('stripe')}
-            disabled={submitting}
-          >
-            <Icon name="card-outline" size={24} color={theme.primary} />
-            <View style={styles.optionDetails}>
-              <Text style={[styles.optionTitle, { color: theme.text }]}>Stripe</Text>
-              <Text style={[styles.optionSub, { color: theme.textSecondary }]}>Pay by card</Text>
-            </View>
-            {gateway === 'stripe' && <Icon name="checkmark-circle" size={20} color={theme.primary} />}
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[
-              styles.paymentOption,
-              {
-                backgroundColor: gateway === 'paystack' ? theme.primaryLight : theme.backgroundElement,
-                borderColor: gateway === 'paystack' ? theme.primary : theme.border,
-              },
-            ]}
-            onPress={() => setGateway('paystack')}
-            disabled={submitting}
-          >
-            <Icon name="wallet-outline" size={24} color={theme.primary} />
-            <View style={styles.optionDetails}>
-              <Text style={[styles.optionTitle, { color: theme.text }]}>Paystack</Text>
-              <Text style={[styles.optionSub, { color: theme.textSecondary }]}>
-                Card, Mobile Money, bank transfer
-              </Text>
-            </View>
-            {gateway === 'paystack' && <Icon name="checkmark-circle" size={20} color={theme.primary} />}
-          </TouchableOpacity>
+          <PaymentGatewayPicker value={gateway} onChange={setGateway} disabled={submitting} />
 
           <View style={styles.gatewayHintRow}>
             <Icon name="lock-closed-outline" size={13} color={theme.textMuted} />
@@ -681,24 +644,6 @@ const styles = StyleSheet.create({
   couponRemoveText: {
     fontSize: 12,
     fontWeight: '700',
-  },
-  paymentOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    gap: 12,
-  },
-  optionDetails: {
-    flex: 1,
-  },
-  optionTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  optionSub: {
-    fontSize: 12,
   },
   gatewayHintRow: {
     flexDirection: 'row',

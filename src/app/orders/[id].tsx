@@ -11,6 +11,7 @@ import * as WebBrowser from 'expo-web-browser';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Icon } from '@/components/ui/icon';
 import { SafeImage } from '@/components/ui/safe-image';
+import { PaymentGatewayPicker } from '@/components/ui/payment-gateway-picker';
 import { Colors } from '@/constants/theme';
 import { formatGHS } from '@/lib/currency';
 import { useToastStore } from '@/stores/toast.store';
@@ -152,34 +153,7 @@ export default function OrderDetailScreen() {
               This order hasn't been paid for yet. Complete payment to have it processed.
             </Text>
 
-            <View style={styles.gatewayRow}>
-              <TouchableOpacity
-                style={[
-                  styles.gatewayOption,
-                  {
-                    backgroundColor: gateway === 'paystack' ? theme.primaryLight : theme.backgroundElement,
-                    borderColor: gateway === 'paystack' ? theme.primary : theme.border,
-                  },
-                ]}
-                onPress={() => setGateway('paystack')}
-                disabled={paying}
-              >
-                <Text style={[styles.gatewayOptionText, { color: theme.text }]}>Paystack</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.gatewayOption,
-                  {
-                    backgroundColor: gateway === 'stripe' ? theme.primaryLight : theme.backgroundElement,
-                    borderColor: gateway === 'stripe' ? theme.primary : theme.border,
-                  },
-                ]}
-                onPress={() => setGateway('stripe')}
-                disabled={paying}
-              >
-                <Text style={[styles.gatewayOptionText, { color: theme.text }]}>Stripe</Text>
-              </TouchableOpacity>
-            </View>
+            <PaymentGatewayPicker value={gateway} onChange={setGateway} disabled={paying} />
 
             <TouchableOpacity
               style={[styles.payButton, { backgroundColor: theme.primary, opacity: paying ? 0.7 : 1 }]}
@@ -360,21 +334,6 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontSize: 15,
     fontWeight: '800',
-  },
-  gatewayRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  gatewayOption: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    alignItems: 'center',
-  },
-  gatewayOptionText: {
-    fontSize: 13,
-    fontWeight: '700',
   },
   payButton: {
     flexDirection: 'row',

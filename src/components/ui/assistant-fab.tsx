@@ -58,7 +58,7 @@ const styles = StyleSheet.create({
   wrap: {
     position: 'absolute',
     right: 20,
-    bottom: 84,
+    bottom: 150,
     width: 56,
     height: 56,
     alignItems: 'center',

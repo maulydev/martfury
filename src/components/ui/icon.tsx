@@ -53,7 +53,8 @@ export type IconName =
   | 'list-outline'
   | 'filter-outline'
   | 'eye-outline'
-  | 'eye-off-outline';
+  | 'eye-off-outline'
+  | 'logo-bitcoin';
 
 interface IconProps {
   name: IconName;
@@ -113,6 +114,7 @@ const symbolMap: Record<IconName, { ios: string; android: string; web: string; t
   'filter-outline': { ios: 'line.3.horizontal.decrease.circle', android: 'filter_list', web: 'filter_list', textFallback: '⚙️' },
   'eye-outline': { ios: 'eye', android: 'visibility', web: 'visibility', textFallback: '👁️' },
   'eye-off-outline': { ios: 'eye.slash', android: 'visibility_off', web: 'visibility_off', textFallback: '🙈' },
+  'logo-bitcoin': { ios: 'bitcoinsign.circle', android: 'currency_bitcoin', web: 'currency_bitcoin', textFallback: '₿' },
 };
 
 export function Icon({ name, size = 20, color = '#000000' }: IconProps) {

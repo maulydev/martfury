@@ -72,7 +72,7 @@ async function parseOrThrow<T>(res: Response): Promise<T> {
   return body as T;
 }
 
-export type PaymentGateway = 'stripe' | 'paystack';
+export type PaymentGateway = 'stripe' | 'paystack' | 'crypto';
 
 export type InitiateOrderPaymentInput = {
   email: string;
