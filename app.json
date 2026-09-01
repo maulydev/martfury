@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "martfury",
+    "name": "MartFury",
     "slug": "martfury",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -12,6 +12,7 @@
       "icon": "./assets/expo.icon"
     },
     "android": {
+      "package": "com.dahcodingkid.martfury",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -40,6 +41,13 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "5f335c15-6178-4ffd-9d58-eff4354479f6"
+      }
+    },
+    "owner": "dahcodingkid"
   }
 }

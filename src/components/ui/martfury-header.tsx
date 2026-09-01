@@ -10,6 +10,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from './icon';
 import { Colors } from '@/constants/theme';
 import { useCartStore } from '@/stores/cart.store';
@@ -23,6 +24,7 @@ export function MartfuryHeader() {
   const cartCount = useCartStore((s) => s.getCount());
   const wishlistCount = useWishlistStore((s) => s.items.length);
   const { data: session } = useSession();
+  const insets = useSafeAreaInsets();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All Categories');
@@ -34,7 +36,11 @@ export function MartfuryHeader() {
   };
 
   return (
-    <View style={styles.headerContainer}>
+    // Home/Shop render this with headerShown: false (see (tabs)/_layout.tsx),
+    // so nothing else accounts for the status bar/notch on Android's
+    // edge-to-edge layout (SDK 57 default) — without this, the logo/cart/
+    // wishlist row renders underneath it and is unreachable.
+    <View style={[styles.headerContainer, { paddingTop: insets.top }]}>
       {/* Top Header Bar */}
       <View style={styles.topBar}>
         <View style={styles.topBarContent}>
@@ -45,10 +51,13 @@ export function MartfuryHeader() {
               onPress={() => router.push('/')}
               activeOpacity={0.8}
             >
+              {/* Matches the web header exactly (~/Desktop/ecommerce-project's
+                  src/components/header.tsx): lowercase "mart" + blue "fury",
+                  no dot — the dot here previously was a mobile-only addition
+                  that didn't match the actual brand. */}
               <Text style={styles.logoText}>
                 mart<Text style={styles.logoAccent}>fury</Text>
               </Text>
-              <View style={styles.logoDot} />
             </TouchableOpacity>
 
             {/* Actions: Wishlist, Cart, Account */}
@@ -165,17 +174,10 @@ const styles = StyleSheet.create({
     letterSpacing: -0.5,
   },
   logoAccent: {
-    color: '#000000',
+    // Web's text-blue-600 (~#2563eb) — close enough to reuse the app's own
+    // primary token instead of a second hardcoded blue.
+    color: Colors.light.primary,
     fontWeight: '900',
-  },
-  logoDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#ffaa00',
-    marginLeft: 2,
-    alignSelf: 'flex-start',
-    marginTop: 4,
   },
   searchSection: {
     width: '100%',

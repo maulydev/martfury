@@ -1,6 +1,7 @@
 import React from 'react';
 import { StyleSheet, View, Text, ScrollView, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from '@/components/ui/icon';
 import { ProductCard } from '@/components/ui/product-card';
 import { Colors } from '@/constants/theme';
@@ -11,6 +12,7 @@ import { parseCurrency } from '@/lib/currency';
 
 export default function WishlistScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const addItem = useCartStore((s) => s.addItem);
   const wishlistItems = useWishlistStore((s) => s.items);
   const removeFromWishlist = useWishlistStore((s) => s.removeItem);
@@ -37,7 +39,10 @@ export default function WishlistScreen() {
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      <View style={styles.bodyWrapper}>
+      {/* No headerShown-provided top inset here either (headerShown: false
+          on this tab, see (tabs)/_layout.tsx) — same edge-to-edge fix as
+          MartfuryHeader. */}
+      <View style={[styles.bodyWrapper, { paddingTop: insets.top + 8 }]}>
         <View style={styles.mainContentContainer}>
           {/* HEADER BAR */}
           <View style={styles.headerTitleRow}>

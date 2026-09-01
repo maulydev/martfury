@@ -12,6 +12,7 @@ import {
   Image,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from '@/components/ui/icon';
 import { Colors } from '@/constants/theme';
 import { formatGHS } from '@/lib/currency';
@@ -36,6 +37,7 @@ export default function AssistantScreen() {
   const router = useRouter();
   const theme = Colors.light;
   const configured = isAssistantConfigured();
+  const insets = useSafeAreaInsets();
 
   const [messages, setMessages] = useState<AssistantMessage[]>([]);
   const [input, setInput] = useState('');
@@ -77,8 +79,10 @@ export default function AssistantScreen() {
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <View style={[styles.container, { backgroundColor: theme.background }]}>
-        {/* Header */}
-        <View style={[styles.header, { borderBottomColor: theme.border }]}>
+        {/* Header — this route is a modal push (see the comment above), not
+            a headerShown navigation screen, so nothing else accounts for
+            the status bar/notch on Android's edge-to-edge layout. */}
+        <View style={[styles.header, { borderBottomColor: theme.border, paddingTop: insets.top + 14 }]}>
           <View style={styles.headerLeft}>
             <View style={styles.avatarWrap}>
               <View style={[styles.avatarBox, { backgroundColor: theme.primary }]}>
